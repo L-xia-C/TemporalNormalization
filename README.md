@@ -19,6 +19,41 @@ self.ConvBlock2 = nn.Sequential(
     nn.ReLU(inplace=True),)
 ```
 
+## Inserting the TN module into any end-to-end model
+It is important to note that the TN module must operate on the temporal axis. For instance, in a transformer, it is necessary to first reshape and isolate the temporal axis before applying TN. 
+```python
+# Reshape to B, T, H, W, C features
+x = x.view(-1, t//4, 4, 4, x.size(-1))
+
+# Apply TN on T axis
+x = TNM(axis=1)(x)
+
+# Reshape to transformers features
+x = x.view(x.size(0), -1, x.size(-1))
+
+x = self.transformer_block(x)
+```
+
+For models similar to TS-CAN, in PyTorch, its feature dimension is `(BxT, C, H, W)`. Therefore, it is necessary to specify `axis=0` and `frames=T`. 
+```python
+# Taking TS-CAN modification in rPPG-Toolbox as an example. 
+def forward(self, inputs, params=None):
+
+    # Do not use diff with TN! RAW only!
+
+    # diff_input = inputs[:, :3, :, :]
+    raw_input = inputs[:, 3:, :, :]            # (Bx160, C, H, W)
+
+    d0 = TNM(axis=0, frames=160)(raw_input)    # Assuming the chunk size is 160, apply TN
+    # diff_input = self.TSM_1(diff_input)
+    d0 = self.TSM_1(d0)
+    d1 = torch.tanh(self.motion_conv1(d0))
+
+    d1 = TNM(axis=0, frames=160)(d1)           # Apply TN
+    d1 = self.TSM_2(d1)
+    d2 = torch.tanh(self.motion_conv2(d1))
+```
+
 ## Inserting TN into any end-to-end model (Keras)
 Please refer to the source code [TN/model_tn.py](https://github.com/KegangWangCCNU/TemporalNormalization/blob/main/TN/model_tn.py).
 
@@ -29,7 +64,8 @@ Please refer to [PhysNet_TN_rPPG-Toolbox.py](https://github.com/KegangWangCCNU/T
 * __Note: For rPPG-Toolbox, do not use any preprocessing or postprocessing, and ensure that both the input and output in the yaml are set to 'Raw'.__
 
 ## Benchmark results with the TN module ([PhysBench](https://github.com/KegangWangCCNU/PhysBench))
-Please refer to the source code [TN folder](https://github.com/KegangWangCCNU/TemporalNormalization/blob/main/TN). 
+Please refer to the [source code](https://github.com/KegangWangCCNU/TemporalNormalization/blob/main/TN). 
+When running the code, it needs to be integrated into [PhysBench](https://github.com/KegangWangCCNU/PhysBench).
 
 ![image](https://github.com/user-attachments/assets/61f92d53-448c-4ea1-8107-3c9e4f6f425c)
 
